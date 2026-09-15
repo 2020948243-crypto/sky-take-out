@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.sky.mapper.SetmealDishMapper">
+
+    <select id="getSetmealIdsByDishIds" resultType="java.lang.Long">
+        select setmeal_id from setmeal_dish where id in
+        <foreach collection="ids" item="dishId" separator="," open="(" close=")">
+            #{dishId}
+        </foreach>
+    </select>
+    <update id="update">
+        update setmeal_dish
+        <set>
+            <if test="setmealId!=null">setmeal_id=#{setmealId},</if>
+            <if test="dishId!=null">dish_id=#{dishId},</if>
+            <if test="name!=null and name!=''">name=#{name},</if>
+            <if test="price!=null">price=#{price},</if>
+            <if test="copies!=null">copies=#{copies},</if>
+        </set>
+        where id=#{id}
+    </update>
+</mapper>
