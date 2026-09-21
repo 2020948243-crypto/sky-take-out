@@ -15,6 +15,7 @@ import com.sky.service.OrderService;
 import com.sky.utils.WeChatPayUtil;
 import com.sky.vo.OrderPaymentVO;
 import com.sky.vo.OrderSubmitVO;
+import com.sky.websocket.WebSocketServer;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -23,7 +24,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class OrderServiceImpl implements OrderService {
@@ -40,13 +43,15 @@ public class OrderServiceImpl implements OrderService {
     private UserMapper userMapper;
     @Autowired
     private WeChatPayUtil weChatPayUtil;
+    @Autowired
+    private WebSocketServer webSocketServer;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public OrderSubmitVO submitOrder(OrdersSubmitDTO ordersSubmitDTO) {
         //异常情况处理（收货地址为空、购物车为空）
         AddressBook addressBook = addressBookMapper.getById(ordersSubmitDTO.getAddressBookId());
-        if(addressBook == null){
+        if (addressBook == null) {
             throw new AddressBookBusinessException(MessageConstant.ADDRESS_BOOK_IS_NULL);
         }
         Long userId = BaseContext.getCurrentId();
@@ -56,7 +61,7 @@ public class OrderServiceImpl implements OrderService {
         shoppingCart.setUserId(userId);
 
         List<ShoppingCart> shoppingCartList = shoppingCartMapper.list(shoppingCart);
-        if(shoppingCartList == null || shoppingCartList.isEmpty()){
+        if (shoppingCartList == null || shoppingCartList.isEmpty()) {
             throw new ShoppingCartBusinessException(MessageConstant.SHOPPING_CART_IS_NULL);
         }
 
@@ -77,7 +82,7 @@ public class OrderServiceImpl implements OrderService {
 
         //构造订单明细集合
         List<OrderDetail> orderDetailList = new ArrayList<OrderDetail>();
-        for(ShoppingCart cart : shoppingCartList){
+        for (ShoppingCart cart : shoppingCartList) {
             OrderDetail orderDetail = new OrderDetail();
             BeanUtils.copyProperties(cart, orderDetail);
             orderDetail.setOrderId(orders.getId());
@@ -147,5 +152,12 @@ public class OrderServiceImpl implements OrderService {
                 .build();
 
         orderMapper.update(orders);
+
+        //来单提醒（消息提示和语音播报）
+        Map map = new HashMap();
+        map.put("type", 1);//1为来单提醒，2为客户催单
+        map.put("orderId", ordersDB.getId());
+        map.put("content", "订单号：" + outTradeNo);
+        webSocketServer.sendToAllClient(JSONObject.toJSONString(map));
     }
 }
