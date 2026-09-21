@@ -28,4 +28,5 @@
         </set>
         where id = #{id}
     </update>
+    <select id="getByStatusAndOrderTimeLT" resultType="com.sky.entity.Orders"></select>
 </mapper>
