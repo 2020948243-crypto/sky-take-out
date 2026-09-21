@@ -160,4 +160,19 @@ public class OrderServiceImpl implements OrderService {
         map.put("content", "订单号：" + outTradeNo);
         webSocketServer.sendToAllClient(JSONObject.toJSONString(map));
     }
+
+    @Override
+    public void reminder(Long id) {
+        //查询订单是否存在
+        Orders orders = orderMapper.getById(id);
+        if(orders == null){
+            throw new OrderBusinessException(MessageConstant.ORDER_NOT_FOUND);
+        }
+
+        Map map = new HashMap();
+        map.put("type",2);//1表示用户下单 2表示用户催单
+        map.put("orderId",id);
+        map.put("content","订单号："+orders.getNumber());
+        webSocketServer.sendToAllClient(JSONObject.toJSONString(map));
+    }
 }
