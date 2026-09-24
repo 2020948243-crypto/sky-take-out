@@ -69,4 +69,13 @@
         order by number desc
         limit 0,10
     </select>
+    <select id="pageQuery" resultType="com.sky.entity.Orders">
+        select * from orders
+        <where>
+            <if test="status != null">
+                status=#{status}
+            </if>
+        </where>
+        order by order_time desc
+    </select>
 </mapper>
