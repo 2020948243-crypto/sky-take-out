@@ -77,4 +77,13 @@ public class OrderController {
         PageResult pageResult = orderService.historyOrdersQuery(ordersPageQueryDTO);
         return Result.success(pageResult);
     }
+
+    /*
+    *
+    * 查询订单详情
+    *
+    * */
+    //@GetMapping("/orderDetail/{id}")
+    //@ApiOperation("查询订单详情")
+    //public Result<Orders>
 }
