@@ -182,7 +182,7 @@ public class ReportServiceImpl implements ReportService {
             for(int i = 0; i < 30; i++){
                 LocalDate date = begin.plusDays(i);
 
-                businessData = workspaceService.getBusinessData(LocalDateTime.of(begin,LocalTime.MIN),LocalDateTime.of(begin,LocalTime.MAX));
+                businessData = workspaceService.getBusinessData(LocalDateTime.of(date,LocalTime.MIN),LocalDateTime.of(begin,LocalTime.MAX));
                 row = sheet.getRow(7+i);
                 row.getCell(1).setCellValue(date);
                 row.getCell(2).setCellValue(businessData.getTurnover());
