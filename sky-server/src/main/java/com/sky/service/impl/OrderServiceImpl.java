@@ -1,6 +1,8 @@
 package com.sky.service.impl;
 
 import com.alibaba.fastjson.JSONObject;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.pagehelper.Page;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
@@ -19,12 +21,16 @@ import com.sky.result.PageResult;
 import com.sky.service.OrderService;
 import com.sky.utils.WeChatPayUtil;
 import com.sky.vo.OrderPaymentVO;
+import com.sky.vo.OrderStatisticsVO;
 import com.sky.vo.OrderSubmitVO;
+import com.sky.vo.OrderVO;
 import com.sky.websocket.WebSocketServer;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.CollectionUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -32,6 +38,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 public class OrderServiceImpl implements OrderService {
@@ -50,6 +57,8 @@ public class OrderServiceImpl implements OrderService {
     private WeChatPayUtil weChatPayUtil;
     @Autowired
     private WebSocketServer webSocketServer;
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -187,5 +196,110 @@ public class OrderServiceImpl implements OrderService {
         Page<Orders> ordersList = orderMapper.pageQuery(ordersPageQueryDTO);
 
         return new PageResult(ordersList.getTotal(),ordersList.getResult());
+    }
+
+    @Override
+    public OrderVO getOrderDetail(Long id) {
+        OrderVO orderVO = new OrderVO();
+        Orders orders = orderMapper.getById(id);
+        try {
+            String jsonStr = objectMapper.writeValueAsString(orders);
+            orderVO.setOrderDishes(jsonStr);
+            List<OrderDetail> orderDetailList = orderDetailMapper.getByOrderId(id);
+            orderVO.setOrderDetailList(orderDetailList);
+            return orderVO;
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
+    public void userCancelOrderById(Long id) throws Exception {
+        Orders ordersDB = orderMapper.getById(id);
+
+       if(ordersDB == null){
+           throw new OrderBusinessException(MessageConstant.ORDER_NOT_FOUND);
+       }
+
+       if(ordersDB.getStatus() != Orders.PENDING_PAYMENT || ordersDB.getPayStatus() != Orders.TO_BE_CONFIRMED){
+           throw new OrderBusinessException(MessageConstant.ORDER_STATUS_ERROR);
+       }
+
+       //使用新的对象只复制需要修改的字段，简洁性能好
+       Orders orders = new Orders();
+       orders.setId(ordersDB.getId());
+
+        // 订单处于待接单状态下取消，需要进行退款
+        if (ordersDB.getStatus().equals(Orders.TO_BE_CONFIRMED)) {
+            //调用微信支付退款接口
+            weChatPayUtil.refund(
+                    ordersDB.getNumber(), //商户订单号
+                    ordersDB.getNumber(), //商户退款单号
+                    new BigDecimal(0.01),//退款金额，单位 元
+                    new BigDecimal(0.01));//原订单金额
+
+            //支付状态修改为 退款
+            orders.setPayStatus(Orders.REFUND);
+        }
+
+       orders.setStatus(Orders.CANCELLED);
+       orders.setOrderTime(LocalDateTime.now());
+       orders.setCancelReason("用户取消");
+       orderMapper.update(orders);
+    }
+
+    @Override
+    public void repetition(Long id) {
+        Long userId = BaseContext.getCurrentId();
+
+        //根据id查询当前订单详情
+        List<OrderDetail> orderDetailList = orderDetailMapper.getByOrderId(id);
+
+        //把当前订单详情插入回购物车
+        List<ShoppingCart> shoppingCartList = orderDetailList.stream().map(x->{
+            ShoppingCart shoppingCart = new ShoppingCart();
+
+            BeanUtils.copyProperties(x,shoppingCart);
+            shoppingCart.setUserId(userId);
+            shoppingCart.setCreateTime(LocalDateTime.now());
+            return shoppingCart;
+        }).collect(Collectors.toList());
+
+        shoppingCartMapper.insertBatch(shoppingCartList);
+    }
+
+    @Override
+    public PageResult conditionSearch(OrdersPageQueryDTO ordersPageQueryDTO) {
+        PageHelper.startPage(ordersPageQueryDTO.getPage(),ordersPageQueryDTO.getPageSize());
+
+        Page<Orders> page = orderMapper.pageQuery(ordersPageQueryDTO);
+        List<OrderVO> orderVOs = new ArrayList<>();
+        List<Orders> ordersList = page.getResult();
+        if(!CollectionUtils.isEmpty(ordersList)){
+            for(Orders orders : ordersList){
+                OrderVO orderVO = new OrderVO();
+                try {
+                    String jsonObject = objectMapper.writeValueAsString(orders);
+                    orderVO.setOrderDishes(jsonObject);
+                    List<OrderDetail> orderDetailList = orderDetailMapper.getByOrderId(orders.getId());
+                    orderVO.setOrderDetailList(orderDetailList);
+                    orderVOs.add(orderVO);
+                } catch (JsonProcessingException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        }
+
+        return new PageResult(page.getTotal(),orderVOs);
+    }
+
+    @Override
+    public OrderStatisticsVO statistics() {
+        OrderStatisticsVO orderStatisticsVO = new OrderStatisticsVO();
+        orderStatisticsVO.setToBeConfirmed(orderMapper.countByStatus(Orders.TO_BE_CONFIRMED));
+        orderStatisticsVO.setConfirmed(orderMapper.countByStatus(Orders.CONFIRMED));
+        orderStatisticsVO.setDeliveryInProgress(orderMapper.countByStatus(Orders.DELIVERY_IN_PROGRESS));
+
+        return orderStatisticsVO;
     }
 }

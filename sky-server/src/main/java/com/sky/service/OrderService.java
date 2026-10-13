@@ -6,7 +6,9 @@ import com.sky.dto.OrdersPaymentDTO;
 import com.sky.dto.OrdersSubmitDTO;
 import com.sky.result.PageResult;
 import com.sky.vo.OrderPaymentVO;
+import com.sky.vo.OrderStatisticsVO;
 import com.sky.vo.OrderSubmitVO;
+import com.sky.vo.OrderVO;
 
 public interface OrderService {
     /*
@@ -42,4 +44,39 @@ public interface OrderService {
     *
     * */
     PageResult historyOrdersQuery(OrdersPageQueryDTO ordersPageQueryDTO);
+
+    /*
+    *
+    * 查询订单详情
+    *
+    * */
+    OrderVO getOrderDetail(Long id);
+
+    /*
+    *
+    *  用户取消订单
+    *
+    * */
+    void userCancelOrderById(Long id) throws Exception;
+
+    /*
+    *
+    * 再来一单
+    *
+    * */
+    void repetition(Long id);
+
+    /*
+    *
+    * 条件搜索订单
+    *
+    * */
+    PageResult conditionSearch(OrdersPageQueryDTO ordersPageQueryDTO);
+
+    /*
+    *
+    * 各个状态的订单数量统计
+    *
+    * */
+    OrderStatisticsVO statistics();
 }
